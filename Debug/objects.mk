@@ -4,4 +4,5 @@
 
 USER_OBJS :=
 
-LIBS := -lOpenNI
+LIBS := -ljack -lpthread -lrt -lOpenNI
+
