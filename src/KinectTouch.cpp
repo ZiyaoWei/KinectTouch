@@ -102,6 +102,7 @@ int main() {
 
 	const double debugFrameMaxDepth = 4000; // maximal distance (in millimeters) for 8 bit debug depth frame quantization
 	const char* windowName = "Debug";
+	const char* colorWindowName = "image";
 	const Scalar debugColor0(0, 0, 128);
 	const Scalar debugColor1(255, 0, 0);
 	const Scalar debugColor2(255, 255, 255);
@@ -109,7 +110,7 @@ int main() {
 	const Scalar debugColor4(255, 0, 255);
 
 	int xMin = 50;
-	int xMax = 600;
+	int xMax = 550;
 	int yMin = 50;
 	int yMax = 300;
 
@@ -127,6 +128,9 @@ int main() {
 	Mat1s background(480, 640);
 	vector<Mat1s> buffer(nBackgroundTrain);
 
+	IplImage * image = cvCreateImage(cvSize(640, 480), 8, 3);
+	IplImage * convertedImage = cvCreateImage(cvSize(640, 480), 8, 3);
+
 	initOpenNI("niConfig.xml");
 
 	// TUIO server object
@@ -138,6 +142,11 @@ int main() {
 	}
 	TuioTime time;
 
+	namedWindow(colorWindowName);
+	createTrackbar("xMin", colorWindowName, &xMin, 640);
+	createTrackbar("xMax", colorWindowName, &xMax, 640);
+	createTrackbar("yMin", colorWindowName, &yMin, 480);
+	createTrackbar("yMax", colorWindowName, &yMax, 480);
 	// create some sliders
 	namedWindow(windowName);
 	createTrackbar("xMin", windowName, &xMin, 640);
@@ -153,7 +162,7 @@ int main() {
 	JackByTheNotes * notesJack = new JackByTheNotes();
 	notesJack->connect();
 	sleep(2);
-	system("sudo jack_connect metro:Paganini system:playback_1 &");
+	system("sudo jack_connect Piano:Rubinstein system:playback_1 &");
 
 	map<double, timeval> keys;
 
@@ -173,9 +182,18 @@ int main() {
 		depth.data = (uchar*) xnDepthGenerator.GetDepthMap();
 		//xnImgeGenertor.GetGrayscale8ImageMap()
 
+		XnRGB24Pixel* xnRgb =
+				const_cast<XnRGB24Pixel*>(xnImgeGenertor.GetRGB24ImageMap());
+				//		IplImage * image = cvCreateImage(cvSize(640, 480), 8, 3);
+				//		IplImage * convertedImage = cvCreateImage(cvSize(640, 480), 8, 3);
+cvSetData		(image, xnRgb, 640 * 3);
+		cvConvertImage(image, convertedImage, CV_CVTIMG_SWAP_RB);
+		bool color = true;
+		rgb = convertedImage;
+		//		cvtColor(rgb,rgb,CV_RGB2BGR);
 		// update rgb image
-		//rgb.data = (uchar*) xnImgeGenertor.GetRGB24ImageMap(); // segmentation fault here
-		//cvtColor(rgb, rgb, CV_RGB2BGR);
+		//		rgb.data = (uchar*) xnImgeGenertor.GetRGB24ImageMap(); // segmentation fault here
+		//		cvCvtColor(rgb, rgb, CV_BGR2RGB);
 
 		// extract foreground by simple subtraction of very basic background model
 		foreground = background - depth;
@@ -227,6 +245,8 @@ int main() {
 		cvtColor(depth8, debug, CV_GRAY2BGR);
 		debug.setTo(debugColor0, touch); // touch mask
 		rectangle(debug, roi, debugColor1, 2); // surface boundaries
+		if (color)
+			rectangle(rgb, roi, debugColor1, 2); // surface boundaries
 
 		// draw 10 white keys within the roi
 		int stride = (xMax - xMin) / 10;
@@ -235,21 +255,32 @@ int main() {
 			if (keys == 3 || keys == 7) {
 				Point upper(xMin + keys * stride, yMin);
 				line(debug, upper, lower, debugColor3, 2, 0);
+				if (color)
+					line(rgb, upper, lower, debugColor3, 2, 0);
 				continue;
 			} else {
 				Point upper(xMin + keys * stride, (yMin + yMax) / 2);
 				line(debug, upper, lower, debugColor3, 2, 0);
+				if (color)
+					line(rgb, upper, lower, debugColor3, 2, 0);
 			}
 			Point blkUpper(xMin + keys * stride - stride / 3, yMin);
 			Point blkLower(xMin + keys * stride + stride / 3,
 					(yMin + yMax) / 2);
 			rectangle(debug, blkUpper, blkLower, debugColor4, 2);
+			if (color)
+				rectangle(rgb, blkUpper, blkLower, debugColor4, 2);
 		}
 
 		for (unsigned int i = 0; i < touchPoints.size(); i++) { // touch points
 			circle(debug, touchPoints[i], 5, debugColor2, CV_FILLED);
+			if (color)
+				circle(rgb, touchPoints[i], 5, debugColor2, CV_FILLED);
 			double frequency = piano->keyFrequency(touchPoints[i].y - 50,
 					touchPoints[i].x - 50);
+
+			cout << frequency << " " << touchPoints[i].y - 50 << " "
+					<< touchPoints[i].x - 50 << endl;
 
 			if (keys.find(frequency) == keys.end()) {
 				Note * note = new Note(frequency, 2, 4000);
@@ -270,8 +301,18 @@ int main() {
 			}
 		}
 		// render debug frame (with sliders)
+//		IplImage grayScale = debug;
+//		cvFlip(&grayScale, NULL, 1);
+//		Mat gray(&grayScale);
+//		imshow(windowName, gray);
+//
+//		IplImage colorful = rgb;
+//		cvFlip(&colorful, NULL, 1);
+//		Mat real(&colorful);
+//		imshow("image", real);
 		imshow(windowName, debug);
-		//imshow("image", rgb);
+		imshow("image", rgb);
+		//		cvShowImage("image", image);
 	}
 
 	return 0;
